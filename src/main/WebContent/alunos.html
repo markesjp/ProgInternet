@@ -307,14 +307,16 @@
     }
 
     async function load() {
-      tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
-      try {
-        rows = await apiGet('list');
-        applyFilter();
-      } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
-      }
-    }
+    	  tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
+    	  try {
+    	    const resp = await apiGet('list');
+    	    rows = resp.data || [];   // <<< AQUI
+    	    applyFilter();
+    	  } catch (e) {
+    	    tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
+    	  }
+    	}
+
 
     function applyFilter() {
       const q = (search.value || '').toLowerCase();

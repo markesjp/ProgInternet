@@ -2,6 +2,7 @@
 <%
   request.setAttribute("pageTitle", "Alunos - Autoescola");
 %>
+
 <jsp:include page="/WEB-INF/jsp/components/header.jsp" />
 <jsp:include page="/WEB-INF/jsp/components/menu.jsp" />
 
@@ -12,8 +13,12 @@
       <div class="text-muted small">Dica: clique em <code class="kbd">Editar</code> para carregar os dados no formulário.</div>
     </div>
     <div class="d-flex gap-2">
-      <button class="btn btn-outline-secondary" id="btnReload"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
-      <button class="btn btn-primary" id="btnNew"><i class="bi bi-plus-lg me-1"></i>Novo aluno</button>
+      <button class="btn btn-outline-secondary" id="btnReload">
+        <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
+      </button>
+      <button class="btn btn-primary" id="btnNew">
+        <i class="bi bi-plus-lg me-1"></i>Novo aluno
+      </button>
     </div>
   </div>
 
@@ -61,10 +66,8 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
 
-      <!-- IMPORTANTE: form deve ser um <form> de verdade (para validação Bootstrap) -->
       <form class="modal-body needs-validation" id="form" novalidate>
         <input type="hidden" id="id" />
-
         <div class="row g-3">
           <div class="col-12 col-md-8">
             <label class="form-label required">Nome</label>
@@ -119,13 +122,15 @@
 
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="btnSave"><i class="bi bi-save me-1"></i>Salvar</button>
+        <button type="button" class="btn btn-primary" id="btnSave">
+          <i class="bi bi-save me-1"></i>Salvar
+        </button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Modal: Confirmar Desativação/Ativação (Opção A) -->
+<!-- Modal: Confirmar Desativação/Ativação -->
 <div class="modal fade" id="modalStatus" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -171,8 +176,6 @@
     </div>
   </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
   const BASE = '<%= request.getContextPath() %>';
@@ -261,13 +264,9 @@
   async function apiPost(op, body) {
     const res = await fetch(API + '?format=json', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Accept': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json' },
       body: new URLSearchParams({ op, ...body }).toString()
     });
-
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || 'Erro inesperado');
     return data;
@@ -341,7 +340,7 @@
     tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
     try {
       const resp = await apiGet('list');
-      // seu servlet retorna {ok:true,data:[...]} para list
+      // servlet -> {ok:true,data:[...]}
       rows = resp.data || [];
       applyFilter();
     } catch (e) {
@@ -408,7 +407,6 @@
       btn.className = 'btn btn-warning';
       btn.innerHTML = '<i class="bi bi-person-x me-1"></i>Desativar';
 
-      // Busca contagem para avisar no modal
       try {
         const r = await apiGet('future_count', { id: row.id });
         const qtd = (r && typeof r.count !== 'undefined') ? r.count : 0;
@@ -433,7 +431,6 @@
     const motivo = document.getElementById('motivoStatus').value || '';
     try {
       if (statusTarget.action === 'deactivate') {
-        // manda confirm=true para executar
         const res = await apiPost('deactivate', { id: statusTarget.id, confirm: true, motivo });
         modalStatus.hide();
         showToast(res.message || 'Aluno desativado.');
@@ -442,7 +439,6 @@
         modalStatus.hide();
         showToast(res.message || 'Aluno ativado.');
       }
-
       await load();
     } catch (e) {
       showToast(e.message, true);
@@ -483,7 +479,6 @@
     }
   });
 
-  // Mensagens vindas de redirect (fallback)
   const msg = qsParam('msg');
   const err = qsParam('erro');
   if (msg) showToast(msg);
