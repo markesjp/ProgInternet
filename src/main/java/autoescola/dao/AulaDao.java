@@ -21,15 +21,26 @@ public class AulaDao {
         this.factory = new ConnectionFactory();
     }
 
+    /**
+     * A tabela aulas possui CHECK: status IN ('MARCADA','DESMARCADA','CONCLUIDA')
+     * Então qualquer valor fora disso precisa ser normalizado aqui.
+     */
     private static String normalizarStatus(String s) {
         if (s == null) return "MARCADA";
         String up = s.trim().toUpperCase();
         if (up.isEmpty()) return "MARCADA";
-        // valores aceitos (ajuste conforme seu CHECK)
-        if (up.equals("MARCADA") || up.equals("AGENDADA") || up.equals("DESMARCADA") || up.equals("CONCLUIDA") || up.equals("CONCLUÍDA")) {
-            if (up.equals("CONCLUÍDA")) return "CONCLUIDA";
-            return up;
-        }
+
+        // ✅ compatibilidade com telas antigas:
+        // AGENDADA -> MARCADA
+        if ("AGENDADA".equals(up)) return "MARCADA";
+
+        // variações/acentos
+        if ("CONCLUÍDA".equals(up)) return "CONCLUIDA";
+        if ("CONCLUIDA".equals(up)) return "CONCLUIDA";
+        if ("MARCADA".equals(up)) return "MARCADA";
+        if ("DESMARCADA".equals(up)) return "DESMARCADA";
+
+        // fallback seguro
         return "MARCADA";
     }
 
@@ -61,7 +72,8 @@ public class AulaDao {
         }
     }
 
-    private void inserirHistorico(Connection conn, Integer aulaId, String from, String to, String motivo, String actor) throws SQLException {
+    private void inserirHistorico(Connection conn, Integer aulaId, String from, String to, String motivo, String actor)
+            throws SQLException {
         try (PreparedStatement s = conn.prepareStatement(
                 "INSERT INTO aulas_historico(aula_id, from_status, to_status, motivo, actor) VALUES (?,?,?,?,?)")) {
             s.setInt(1, aulaId);
@@ -100,7 +112,7 @@ public class AulaDao {
             stmt.setTimestamp(4, Timestamp.valueOf(aula.getDataAula()));
             stmt.setInt(5, aula.getDuracaoMinutos());
             stmt.setString(6, aula.getTipo());
-            stmt.setString(7, status);
+            stmt.setString(7, status); // ✅ sempre compatível com CHECK
             stmt.setString(8, aula.getObservacoes());
 
             stmt.executeUpdate();
@@ -206,7 +218,7 @@ public class AulaDao {
         return aulas;
     }
 
-    // ✅ NOVO: Aulas futuras do aluno (MARCADA/AGENDADA) com JOIN (AulaDetalhada)
+    // ✅ Usado no modal de desativação: buscar apenas MARCADAS (já compatível com CHECK)
     public List<AulaDetalhada> listarFuturasMarcadasDetalhadasPorAluno(Integer alunoId) {
         String sql = "SELECT a.id, a.aluno_id, al.nome AS aluno_nome, "
                 + "a.instrutor_id, i.nome AS instrutor_nome, "
@@ -218,7 +230,7 @@ public class AulaDao {
                 + "LEFT JOIN veiculos v ON a.veiculo_id = v.id "
                 + "WHERE a.aluno_id = ? "
                 + "  AND a.data_aula > NOW() "
-                + "  AND UPPER(a.status) IN ('MARCADA','AGENDADA') "
+                + "  AND UPPER(a.status) = 'MARCADA' "
                 + "ORDER BY a.data_aula ASC";
 
         List<AulaDetalhada> aulas = new ArrayList<>();
@@ -288,7 +300,7 @@ public class AulaDao {
             stmt.setTimestamp(4, Timestamp.valueOf(aula.getDataAula()));
             stmt.setInt(5, aula.getDuracaoMinutos());
             stmt.setString(6, aula.getTipo());
-            stmt.setString(7, novoStatus);
+            stmt.setString(7, novoStatus); // ✅ sempre compatível com CHECK
             stmt.setString(8, aula.getObservacoes());
             stmt.setInt(9, aula.getId());
 
@@ -309,7 +321,7 @@ public class AulaDao {
     }
 
     // ---------------------------
-    // DELETE (soft cancel)
+    // DELETE (soft cancel -> DESMARCADA)
     // ---------------------------
     public void remover(Integer id) {
         Connection conn = null;
@@ -378,7 +390,7 @@ public class AulaDao {
     }
 
     // ---------------------------
-    // Helpers de fechamento/rollback
+    // Helpers
     // ---------------------------
     private static void rollbackQuietly(Connection conn) {
         if (conn == null) return;

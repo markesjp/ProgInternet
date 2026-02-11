@@ -138,8 +138,9 @@ public class AlunoDao {
     // Status + Desmarcação de aulas futuras
     // =========================================================
     public int contarAulasFuturasMarcadas(Integer alunoId) {
+        // ✅ AGENDADA não existe mais no banco (por causa do CHECK); é sempre MARCADA.
         String sql = "SELECT COUNT(id) FROM aulas "
-                   + "WHERE aluno_id = ? AND data_aula > NOW() AND status IN ('MARCADA','AGENDADA')";
+                   + "WHERE aluno_id = ? AND data_aula > NOW() AND UPPER(status) = 'MARCADA'";
         try (Connection conn = factory.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, alunoId);
@@ -156,9 +157,11 @@ public class AlunoDao {
         String actorFinal = (actor == null || actor.isBlank()) ? "system" : actor;
         String motivoFinal = (motivo == null || motivo.isBlank()) ? null : motivo.trim();
 
+        Connection conn = null;
         int desmarcadas = 0;
 
-        try (Connection conn = factory.getConnection()) {
+        try {
+            conn = factory.getConnection();
             conn.setAutoCommit(false);
 
             String statusAtual = "ATIVO";
@@ -176,12 +179,13 @@ public class AlunoDao {
                 return 0;
             }
 
+            // 1) muda status do aluno
             try (PreparedStatement s1 = conn.prepareStatement("UPDATE alunos SET status='INATIVO' WHERE id=?")) {
                 s1.setInt(1, alunoId);
                 s1.executeUpdate();
             }
 
-            // histórico do aluno (se existir)
+            // 2) histórico do aluno (se existir)
             try (PreparedStatement s2 = conn.prepareStatement(
                     "INSERT INTO alunos_historico(aluno_id, from_status, to_status, motivo, actor) VALUES (?,?,?,?,?)")) {
                 s2.setInt(1, alunoId);
@@ -192,19 +196,22 @@ public class AlunoDao {
                 s2.executeUpdate();
             } catch (SQLException ignore) {}
 
-            // histórico das aulas (se existir)
+            // 3) histórico das aulas (se existir)
             try (PreparedStatement s3 = conn.prepareStatement(
                 "INSERT INTO aulas_historico(aula_id, from_status, to_status, motivo, actor) " +
                 "SELECT id, status, 'DESMARCADA', ?, ? FROM aulas " +
-                "WHERE aluno_id = ? AND data_aula > NOW() AND status IN ('MARCADA','AGENDADA')")) {
+                "WHERE aluno_id = ? AND data_aula > NOW() AND UPPER(status) = 'MARCADA'")) {
+
                 s3.setString(1, motivoFinal != null ? motivoFinal : "Aluno desativado (desmarcação automática)");
                 s3.setString(2, actorFinal);
                 s3.setInt(3, alunoId);
                 s3.executeUpdate();
             } catch (SQLException ignore) {}
 
+            // 4) desmarca aulas futuras marcadas
             try (PreparedStatement s4 = conn.prepareStatement(
-                "UPDATE aulas SET status='DESMARCADA' WHERE aluno_id=? AND data_aula > NOW() AND status IN ('MARCADA','AGENDADA')")) {
+                "UPDATE aulas SET status='DESMARCADA' " +
+                "WHERE aluno_id=? AND data_aula > NOW() AND UPPER(status) = 'MARCADA'")) {
                 s4.setInt(1, alunoId);
                 desmarcadas = s4.executeUpdate();
             }
@@ -213,7 +220,13 @@ public class AlunoDao {
             return desmarcadas;
 
         } catch (SQLException e) {
+            rollbackQuietly(conn);
             throw new RuntimeException("Erro ao desativar aluno: " + e.getMessage());
+        } catch (RuntimeException e) {
+            rollbackQuietly(conn);
+            throw e;
+        } finally {
+            closeQuietly(conn);
         }
     }
 
@@ -221,7 +234,9 @@ public class AlunoDao {
         String actorFinal = (actor == null || actor.isBlank()) ? "system" : actor;
         String motivoFinal = (motivo == null || motivo.isBlank()) ? null : motivo.trim();
 
-        try (Connection conn = factory.getConnection()) {
+        Connection conn = null;
+        try {
+            conn = factory.getConnection();
             conn.setAutoCommit(false);
 
             String statusAtual = "ATIVO";
@@ -251,12 +266,18 @@ public class AlunoDao {
 
             conn.commit();
         } catch (SQLException e) {
+            rollbackQuietly(conn);
             throw new RuntimeException("Erro ao ativar aluno: " + e.getMessage());
+        } catch (RuntimeException e) {
+            rollbackQuietly(conn);
+            throw e;
+        } finally {
+            closeQuietly(conn);
         }
     }
 
     // =========================================================
-    // CRUD básico já esperado em outros pontos
+    // CRUD básico
     // =========================================================
     public void inserir(Aluno aluno) {
         String sql = "INSERT INTO alunos (nome, cpf, telefone, email, data_nascimento, categoria_desejada, data_matricula, status) "
@@ -314,5 +335,18 @@ public class AlunoDao {
         } catch (SQLException e) {
             throw new RuntimeException("Erro ao alterar aluno: " + e.getMessage());
         }
+    }
+
+    // ---------------------------
+    // Helpers
+    // ---------------------------
+    private static void rollbackQuietly(Connection conn) {
+        if (conn == null) return;
+        try { conn.rollback(); } catch (Exception ignore) {}
+    }
+
+    private static void closeQuietly(AutoCloseable c) {
+        if (c == null) return;
+        try { c.close(); } catch (Exception ignore) {}
     }
 }

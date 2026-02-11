@@ -1,4 +1,5 @@
-<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
+
+<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" isELIgnored="true"%>
 <%
   request.setAttribute("pageTitle", "Alunos - Autoescola");
 %>
@@ -61,6 +62,7 @@
         <h5 class="modal-title" id="modalTitle">Aluno</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
+
       <form class="modal-body needs-validation" id="form" novalidate>
         <input type="hidden" id="id" />
         <div class="row g-3">
@@ -110,6 +112,7 @@
           </div>
         </div>
       </form>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-primary" id="btnSave"><i class="bi bi-save me-1"></i>Salvar</button>
@@ -126,9 +129,10 @@
         <h5 class="modal-title" id="modalStatusTitle">Confirmar ação</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
+
       <div class="modal-body">
         <div class="alert alert-warning mb-3" id="modalStatusWarn" style="display:none;">
-          <strong>Atenção:</strong> ao desativar este aluno, todas as aulas futuras <b>MARCADAS/AGENDADAS</b> serão automaticamente <b>DESMARCADAS</b>, mantendo histórico.
+          <strong>Atenção:</strong> ao desativar este aluno, todas as aulas futuras <b>MARCADAS</b> serão automaticamente <b>DESMARCADAS</b>, mantendo histórico.
           <div class="small text-muted mt-2" id="modalAulasInfo"></div>
         </div>
 
@@ -162,9 +166,12 @@
         <input type="hidden" id="statusTargetId" />
         <input type="hidden" id="statusTargetAction" />
       </div>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-warning" id="btnConfirmStatus"><i class="bi bi-check2-circle me-1"></i>Confirmar</button>
+        <button type="button" class="btn btn-warning" id="btnConfirmStatus">
+          <i class="bi bi-check2-circle me-1"></i>Confirmar
+        </button>
       </div>
     </div>
   </div>
@@ -211,7 +218,7 @@
   };
 
   let rows = [];
-  let statusTarget = null; // {id, action, nome, status}
+  let statusTarget = null;
 
   function showToast(message, isError = false) {
     toastEl.classList.remove('text-bg-danger', 'text-bg-success');
@@ -220,24 +227,27 @@
     toast.show();
   }
 
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  function onlyDigits(v) { return String(v ?? '').replace(/\D/g, ''); }
+
   function applyMaskCPF(value) {
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    const parts = [];
-    parts.push(digits.slice(0, 3));
-    if (digits.length >= 4) parts.push(digits.slice(3, 6));
-    if (digits.length >= 7) parts.push(digits.slice(6, 9));
-    let out = parts.filter(Boolean).join('.');
-    if (digits.length >= 10) out += '-' + digits.slice(9, 11);
+    const digits = onlyDigits(value).slice(0, 11);
+    const p1 = digits.slice(0, 3);
+    const p2 = digits.slice(3, 6);
+    const p3 = digits.slice(6, 9);
+    const p4 = digits.slice(9, 11);
+    let out = p1;
+    if (digits.length >= 4) out += '.' + p2;
+    if (digits.length >= 7) out += '.' + p3;
+    if (digits.length >= 10) out += '-' + p4;
     return out;
   }
-
-  fields.cpf.addEventListener('input', (e) => {
-    e.target.value = applyMaskCPF(e.target.value);
-  });
-
-  function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  }
+  fields.cpf.addEventListener('input', (e) => { e.target.value = applyMaskCPF(e.target.value); });
 
   function statusBadge(status) {
     const st = String(status || 'ATIVO').toUpperCase();
@@ -260,12 +270,24 @@
   async function apiPost(baseUrl, op, body) {
     const res = await fetch(baseUrl + '?format=json', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Accept': 'application/json'
+      },
       body: new URLSearchParams({ op, ...body }).toString()
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || 'Erro inesperado');
     return data;
+  }
+
+  function normalizeList(resp) {
+    if (Array.isArray(resp)) return resp;
+    if (Array.isArray(resp?.data)) return resp.data;
+    return [];
+  }
+  function normalizeItem(resp) {
+    return resp?.data ?? resp;
   }
 
   function renderTable(list) {
@@ -279,26 +301,25 @@
 
     for (const a of list) {
       const st = String(a.status || 'ATIVO').toUpperCase();
-
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="text-muted">${a.id}</td>
+        <td class="text-muted">${escapeHtml(a.id)}</td>
         <td>
           <div class="fw-semibold">${escapeHtml(a.nome)} ${statusBadge(st)}</div>
           <div class="text-muted small">${escapeHtml(a.email || '')}</div>
         </td>
         <td>${escapeHtml(applyMaskCPF(a.cpf || ''))}</td>
-        <td><span class="badge text-bg-light border">${escapeHtml(a.categoria_desejada)}</span></td>
-        <td>${escapeHtml(a.data_matricula)}</td>
+        <td><span class="badge text-bg-light border">${escapeHtml(a.categoria_desejada || '')}</span></td>
+        <td>${escapeHtml(a.data_matricula || '')}</td>
         <td class="text-end">
-          <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${a.id}" title="Editar">
+          <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${escapeHtml(a.id)}" title="Editar">
             <i class="bi bi-pencil-square"></i>
           </button>
           ${st === 'INATIVO'
-            ? `<button class="btn btn-sm btn-outline-success" data-action="activate" data-id="${a.id}" title="Ativar">
+            ? `<button class="btn btn-sm btn-outline-success" data-action="activate" data-id="${escapeHtml(a.id)}" title="Ativar">
                  <i class="bi bi-person-check"></i>
                </button>`
-            : `<button class="btn btn-sm btn-outline-warning" data-action="deactivate" data-id="${a.id}" title="Desativar">
+            : `<button class="btn btn-sm btn-outline-warning" data-action="deactivate" data-id="${escapeHtml(a.id)}" title="Desativar">
                  <i class="bi bi-person-x"></i>
                </button>`
           }
@@ -308,13 +329,36 @@
     }
   }
 
+  function applyFilter() {
+    const q = (search.value || '').toLowerCase();
+    if (!q) return renderTable(rows);
+
+    const filtered = rows.filter(r =>
+      String(r.nome || '').toLowerCase().includes(q) ||
+      String(r.cpf || '').toLowerCase().includes(q) ||
+      String(r.categoria_desejada || '').toLowerCase().includes(q)
+    );
+    renderTable(filtered);
+  }
+
+  async function load() {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
+    try {
+      const resp = await apiGet(API_ALUNOS, 'list');
+      rows = normalizeList(resp);
+      applyFilter();
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
   function openNew() {
     document.getElementById('modalTitle').textContent = 'Novo aluno';
     fields.id.value = '';
     for (const k of Object.keys(fields)) if (k !== 'id') fields[k].value = '';
     form.classList.remove('was-validated');
     modalForm.show();
-    setTimeout(() => fields.nome.focus(), 250);
+    setTimeout(() => fields.nome.focus(), 150);
   }
 
   function openEdit(a) {
@@ -331,28 +375,6 @@
     modalForm.show();
   }
 
-  async function load() {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
-    try {
-      const resp = await apiGet(API_ALUNOS, 'list');
-      rows = resp.data || [];
-      applyFilter();
-    } catch (e) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
-    }
-  }
-
-  function applyFilter() {
-    const q = (search.value || '').toLowerCase();
-    if (!q) return renderTable(rows);
-    const filtered = rows.filter(r =>
-      (r.nome || '').toLowerCase().includes(q) ||
-      (r.cpf || '').toLowerCase().includes(q) ||
-      (r.categoria_desejada || '').toLowerCase().includes(q)
-    );
-    renderTable(filtered);
-  }
-
   async function save() {
     form.classList.add('was-validated');
     if (!form.checkValidity()) return;
@@ -360,7 +382,7 @@
     const payload = {
       id: fields.id.value,
       nome: fields.nome.value,
-      cpf: String(fields.cpf.value || '').replace(/\D/g, ''),
+      cpf: onlyDigits(fields.cpf.value),
       telefone: fields.telefone.value,
       email: fields.email.value,
       data_nascimento: fields.data_nascimento.value,
@@ -372,7 +394,7 @@
       const isUpdate = !!payload.id;
       const res = await apiPost(API_ALUNOS, isUpdate ? 'update' : 'create', payload);
       modalForm.hide();
-      showToast(res.message || 'Salvo com sucesso.');
+      showToast(res?.message || 'Salvo com sucesso.');
       await load();
     } catch (e) {
       showToast(e.message, true);
@@ -381,42 +403,43 @@
 
   function fmtData(s) {
     if (!s) return '';
-    // vem ISO "2026-02-10T10:00" etc
-    return s.replace('T', ' ').slice(0, 16);
+    return String(s).replace('T', ' ').slice(0, 16);
   }
 
   async function openStatusModal(row, action) {
-    statusTarget = { id: row.id, action, nome: row.nome, status: row.status };
+    statusTarget = { id: row.id, action };
 
     document.getElementById('statusTargetId').value = row.id;
     document.getElementById('statusTargetAction').value = action;
     document.getElementById('motivoStatus').value = '';
 
-    const title = action === 'deactivate' ? 'Confirmar desativação' : 'Confirmar ativação';
-    document.getElementById('modalStatusTitle').textContent = title;
+    document.getElementById('modalStatusTitle').textContent =
+      action === 'deactivate' ? 'Confirmar desativação' : 'Confirmar ativação';
 
     const warn = document.getElementById('modalStatusWarn');
     const info = document.getElementById('modalAulasInfo');
     const aulasBox = document.getElementById('aulasBox');
     const tbodyAulas = document.getElementById('tbodyAulas');
+    const btn = document.getElementById('btnConfirmStatus');
+
     tbodyAulas.innerHTML = '<tr><td colspan="5" class="text-muted">Carregando...</td></tr>';
 
     if (action === 'deactivate') {
       warn.style.display = '';
       aulasBox.style.display = '';
       info.textContent = '';
+      btn.className = 'btn btn-warning';
 
-      document.getElementById('btnConfirmStatus').className = 'btn btn-warning';
-
-      // 1) contagem (seu endpoint já existe)
       apiGet(API_ALUNOS, 'future_count', { id: row.id })
-        .then((r) => { if (r && typeof r.count !== 'undefined') info.textContent = `Aulas futuras marcadas a desmarcar: ${r.count}`; })
+        .then((r) => {
+          const c = r?.count ?? r?.data?.count;
+          if (typeof c !== 'undefined') info.textContent = `Aulas futuras marcadas a desmarcar: ${c}`;
+        })
         .catch(() => { info.textContent = 'Não foi possível obter a contagem.'; });
 
-      // 2) lista (endpoint novo em /aulas)
       apiGet(API_AULAS, 'future_by_aluno', { aluno_id: row.id })
         .then((r) => {
-          const list = r.data || [];
+          const list = Array.isArray(r?.data) ? r.data : (Array.isArray(r) ? r : []);
           if (!list.length) {
             tbodyAulas.innerHTML = '<tr><td colspan="5" class="text-muted">Nenhuma aula futura marcada.</td></tr>';
             return;
@@ -425,7 +448,7 @@
           for (const a of list) {
             const tr = document.createElement('tr');
             tr.innerHTML = `
-              <td class="text-muted">${a.id}</td>
+              <td class="text-muted">${escapeHtml(a.id)}</td>
               <td>${escapeHtml(fmtData(a.data_aula))}</td>
               <td><span class="badge text-bg-light border">${escapeHtml(a.status)}</span></td>
               <td>${escapeHtml(a.instrutor_id)}</td>
@@ -442,7 +465,7 @@
       warn.style.display = 'none';
       aulasBox.style.display = 'none';
       info.textContent = '';
-      document.getElementById('btnConfirmStatus').className = 'btn btn-success';
+      btn.className = 'btn btn-success';
     }
 
     modalStatus.show();
@@ -450,18 +473,17 @@
 
   async function confirmStatus() {
     if (!statusTarget) return;
-
     const motivo = document.getElementById('motivoStatus').value || '';
 
     try {
       if (statusTarget.action === 'deactivate') {
         const res = await apiPost(API_ALUNOS, 'deactivate', { id: statusTarget.id, confirm: true, motivo });
         modalStatus.hide();
-        showToast(res.message || 'Aluno desativado.');
+        showToast(res?.message || 'Aluno desativado.');
       } else {
         const res = await apiPost(API_ALUNOS, 'activate', { id: statusTarget.id, motivo });
         modalStatus.hide();
-        showToast(res.message || 'Aluno ativado.');
+        showToast(res?.message || 'Aluno ativado.');
       }
       await load();
     } catch (e) {
@@ -489,11 +511,12 @@
 
     if (action === 'edit') {
       try {
-        const detail = await apiGet(API_ALUNOS, 'get', { id });
-        openEdit(detail);
+        const detailResp = await apiGet(API_ALUNOS, 'get', { id });
+        openEdit(normalizeItem(detailResp));
       } catch (err) {
         showToast(err.message, true);
       }
+      return;
     }
 
     if (action === 'deactivate' || action === 'activate') {

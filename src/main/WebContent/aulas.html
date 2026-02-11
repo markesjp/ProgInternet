@@ -128,11 +128,13 @@
             </div>
             <div class="col-12 col-md-6">
               <label class="form-label required">Status</label>
-              <select class="form-select" id="status" required>
-                <option value="AGENDADA">AGENDADA</option>
-                <option value="CONCLUIDA">CONCLUÍDA</option>
-                <option value="CANCELADA">CANCELADA</option>
-              </select>
+				<select class="form-select" id="status" required>
+				  <option value="MARCADA">MARCADA (Agendada)</option>
+				  <option value="CONCLUIDA">CONCLUÍDA</option>
+				  <option value="DESMARCADA">DESMARCADA (Cancelada)</option>
+				</select>
+
+
               <div class="invalid-feedback">Selecione o status.</div>
             </div>
 
@@ -271,11 +273,11 @@
     }
 
     function statusBadge(status) {
-      const s = String(status || '').toUpperCase();
-      if (s === 'CONCLUIDA') return '<span class="badge text-bg-success">CONCLUÍDA</span>';
-      if (s === 'CANCELADA') return '<span class="badge text-bg-danger">CANCELADA</span>';
-      return '<span class="badge text-bg-warning text-dark">AGENDADA</span>';
-    }
+    	  const s = String(status || '').toUpperCase();
+    	  if (s === 'CONCLUIDA') return '<span class="badge text-bg-success">CONCLUÍDA</span>';
+    	  if (s === 'DESMARCADA') return '<span class="badge text-bg-danger">DESMARCADA</span>';
+    	  return '<span class="badge text-bg-warning text-dark">MARCADA</span>';
+    	}
 
     function fmtDateTime(iso) {
       // ISO: 2026-01-31T10:30
@@ -299,7 +301,7 @@
       fields.data_aula.value = '';
       fields.duracao_minutos.value = '50';
       fields.tipo.value = 'PRATICA';
-      fields.status.value = 'AGENDADA';
+      fields.status.value = 'MARCADA';
       fields.observacoes.value = '';
       form.classList.remove('was-validated');
       modalForm.show();
