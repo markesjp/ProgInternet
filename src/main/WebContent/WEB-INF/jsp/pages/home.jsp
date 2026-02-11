@@ -86,6 +86,7 @@
           <div class="d-flex flex-wrap gap-2">
             <a class="btn btn-outline-dark" href="<%= request.getContextPath() %>/buscar-aluno"><i class="bi bi-search me-1"></i> Busca de Aluno</a>
             <a class="btn btn-outline-primary" href="<%= request.getContextPath() %>/login"><i class="bi bi-box-arrow-in-right me-1"></i> Login (atividade)</a>
+            <a class="btn btn-outline-success" href="<%= request.getContextPath() %>/upload"><i class="bi bi-upload me-1"></i> Uploads (atividade)</a>
           </div>
           <div class="text-muted small mt-2">
             Dica: para a migração do banco (status/histórico), rode o script em <code>WEB-INF/sql/autoescola_migracao_status_historico.sql</code>.

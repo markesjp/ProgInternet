@@ -24,6 +24,10 @@ import autoescola.model.AulaDetalhada;
  * - API JSON com listagem detalhada (JOIN) para visão/edição.
  * - Validações (inclusive relações: aluno/instrutor/veículo).
  * - Ciclo de vida: init(), service(), destroy().
+ *
+ * NOVO:
+ * - op=future_by_aluno (JSON): lista aulas futuras MARCADAS/AGENDADAS de um aluno
+ *   com JOIN (AulaDetalhada) para modal de desativação do aluno.
  */
 @WebServlet("/aulas")
 public class AulaServlet extends HttpServlet {
@@ -39,7 +43,6 @@ public class AulaServlet extends HttpServlet {
         super.init();
         this.aulaDao = new AulaDao();
         this.alunoDao = new AlunoDao();
-this.alunoDao = new AlunoDao();
         this.instrutorDao = new InstrutorDao();
         this.veiculoDao = new VeiculoDao();
         getServletContext().log("[AulaServlet] init() - inicializado");
@@ -49,6 +52,8 @@ this.alunoDao = new AlunoDao();
     protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         long start = System.currentTimeMillis();
         try {
+            req.setCharacterEncoding("UTF-8");
+            resp.setCharacterEncoding("UTF-8");
             super.service(req, resp);
         } finally {
             long ms = System.currentTimeMillis() - start;
@@ -61,7 +66,6 @@ this.alunoDao = new AlunoDao();
         getServletContext().log("[AulaServlet] destroy() - finalizando");
         this.aulaDao = null;
         this.alunoDao = null;
-this.alunoDao = null;
         this.instrutorDao = null;
         this.veiculoDao = null;
         super.destroy();
@@ -71,14 +75,15 @@ this.alunoDao = null;
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         if (!isJsonRequest(request)) {
             request.getRequestDispatcher("/WEB-INF/jsp/pages/aulas.jsp").forward(request, response);
-        return;
-}
+            return;
+        }
 
         String op = nvl(request.getParameter("op"), "list");
 
         try {
             if ("list".equalsIgnoreCase(op)) {
                 List<AulaDetalhada> aulas = aulaDao.listarDetalhadas();
+                // Mantém seu padrão atual (array puro) para não quebrar JS existente
                 writeJson(response, 200, aulasDetalhadasToJson(aulas));
                 return;
             }
@@ -94,7 +99,23 @@ this.alunoDao = null;
                     writeJson(response, 404, errJson("Aula não encontrada."));
                     return;
                 }
+                // Mantém seu padrão atual (objeto puro)
                 writeJson(response, 200, aulaToJson(a));
+                return;
+            }
+
+            // ✅ NOVO: lista aulas futuras do aluno (para modal de desativação)
+            if ("future_by_aluno".equalsIgnoreCase(op)) {
+                Integer alunoId = parseInt(request.getParameter("aluno_id"));
+                if (alunoId == null) alunoId = parseInt(request.getParameter("id")); // fallback
+                if (alunoId == null || alunoId <= 0) {
+                    writeJson(response, 400, errJson("Parâmetro 'aluno_id' inválido."));
+                    return;
+                }
+
+                List<AulaDetalhada> futuras = aulaDao.listarFuturasMarcadasDetalhadasPorAluno(alunoId);
+                String json = "{\"ok\":true,\"data\":" + aulasDetalhadasToJson(futuras) + "}";
+                writeJson(response, 200, json);
                 return;
             }
 
@@ -246,7 +267,7 @@ this.alunoDao = null;
     }
 
     private String aulaDetalhadaToJson(AulaDetalhada a) {
-        String veiculo = "";
+        String veiculo;
         if (a.getVeiculoModelo() != null && !a.getVeiculoModelo().trim().isEmpty()) {
             veiculo = a.getVeiculoModelo() + (a.getVeiculoPlaca() != null ? " (" + a.getVeiculoPlaca() + ")" : "");
         } else {

@@ -59,6 +59,9 @@ public class LoginServlet extends HttpServlet {
         if (ok) {
             req.setAttribute("resultado", "sucesso");
             req.setAttribute("usuario", usuario);
+
+            // Mantém o usuário logado na sessão (usado pelo módulo de upload).
+            req.getSession(true).setAttribute("usuarioLogado", usuario);
         } else {
             req.setAttribute("resultado", "erro");
             req.setAttribute("erro", "Usuário ou senha inválidos.");

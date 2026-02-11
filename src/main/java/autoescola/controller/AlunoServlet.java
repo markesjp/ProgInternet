@@ -18,10 +18,9 @@ import autoescola.model.Aluno;
 
 /**
  * AlunoServlet
- *
- * - View em JSP (quando não for JSON)
- * - API JSON para CRUD + status
- * - Ciclo de vida: init(), service() e destroy()
+ * - GET view JSP (quando não for JSON)
+ * - API JSON: list/get/future_count
+ * - POST: create/update/activate/deactivate (com confirm e motivo)
  */
 @WebServlet("/alunos")
 public class AlunoServlet extends HttpServlet {
@@ -52,40 +51,44 @@ public class AlunoServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         if (!isJsonRequest(request)) {
+            // AJUSTE o caminho abaixo se seu JSP não estiver nesse local
             request.getRequestDispatcher("/WEB-INF/jsp/pages/alunos.jsp").forward(request, response);
             return;
         }
 
-        String op = nvl(request.getParameter("op"), "list");
+        String op = nvl(request.getParameter("op"), "list").trim().toLowerCase();
 
         try {
-            if ("list".equalsIgnoreCase(op)) {
+            if ("list".equals(op)) {
                 List<Aluno> alunos = dao.listar();
-                writeJson(response, 200, alunosToJson(alunos));
+                writeJson(response, 200, alunosToJson(alunos)); // {ok:true,data:[...]}
                 return;
             }
 
-            if ("get".equalsIgnoreCase(op)) {
+            if ("get".equals(op)) {
                 Integer id = parseInt(request.getParameter("id"));
                 if (id == null || id <= 0) {
                     writeJson(response, 400, errJson("Parâmetro 'id' inválido."));
                     return;
                 }
+
                 Aluno a = dao.buscarPorId(id);
                 if (a == null) {
                     writeJson(response, 404, errJson("Aluno não encontrado."));
                     return;
                 }
+
                 writeJson(response, 200, alunoToJson(a));
                 return;
             }
 
-            if ("future_count".equalsIgnoreCase(op)) {
+            if ("future_count".equals(op)) {
                 Integer id = parseInt(request.getParameter("id"));
                 if (id == null || id <= 0) {
                     writeJson(response, 400, errJson("Parâmetro 'id' inválido."));
                     return;
                 }
+
                 int count = dao.contarAulasFuturasMarcadas(id);
                 writeJson(response, 200, "{\"ok\":true,\"count\":" + count + "}");
                 return;
@@ -93,98 +96,73 @@ public class AlunoServlet extends HttpServlet {
 
             writeJson(response, 400, errJson("Operação inválida: op=" + op));
         } catch (RuntimeException e) {
-            writeJson(response, 500, errJson("Falha ao consultar alunos: " + safeMsg(e)));
+            getServletContext().log("[AlunoServlet] erro", e);
+            writeJson(response, 500, errJson("Falha ao consultar: " + safeMsg(e)));
         }
     }
 
     @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws IOException {
         boolean json = isJsonRequest(request);
 
-        // Compatibilidade: HTML antigo usa name="acao".
-        String op = request.getParameter("op");
-        if (op == null || op.trim().isEmpty()) {
-            String acao = request.getParameter("acao");
-            if ("cadastrar".equalsIgnoreCase(acao)) op = "create";
-            else if ("alterar".equalsIgnoreCase(acao)) op = "update";
-            else if ("remover".equalsIgnoreCase(acao)) op = "delete";
+        String op = nvl(request.getParameter("op"), "").trim().toLowerCase();
+
+        // fallback caso você use acao antiga em forms
+        if (op.isEmpty()) {
+            String acao = nvl(request.getParameter("acao"), "").trim().toLowerCase();
+            if ("cadastrar".equals(acao)) op = "create";
+            else if ("alterar".equals(acao)) op = "update";
+            else if ("remover".equals(acao)) op = "deactivate";
         }
-        op = nvl(op, "").trim().toLowerCase();
 
         try {
-            // =========================
-            // CREATE
-            // =========================
             if ("create".equals(op)) {
                 Aluno aluno = readAlunoFromRequest(request, false);
-                validateAluno(aluno, false);
+                validateAluno(aluno);
 
                 if (dao.existeCpf(aluno.getCpf())) {
-                    respond(response, json, 409,
-                            errJson("CPF já cadastrado."),
-                            redirect(request, "alunos?erro=" + urlEncode("CPF já cadastrado.")));
+                    respond(response, json, 409, errJson("CPF já cadastrado."), "alunos?erro=CPF+já+cadastrado");
                     return;
                 }
 
                 aluno.setStatus("ATIVO");
                 dao.inserir(aluno);
 
-                respond(response, json, 200,
-                        okJson("Aluno cadastrado com sucesso."),
-                        redirect(request, "alunos?msg=" + urlEncode("Aluno cadastrado com sucesso.")));
+                respond(response, json, 200, okJson("Aluno cadastrado com sucesso."), "alunos?msg=Aluno+cadastrado");
                 return;
             }
 
-            // =========================
-            // UPDATE
-            // =========================
             if ("update".equals(op)) {
                 Aluno aluno = readAlunoFromRequest(request, true);
-                validateAluno(aluno, true);
+                validateAluno(aluno);
 
                 Aluno existente = dao.buscarPorId(aluno.getId());
                 if (existente == null) {
-                    respond(response, json, 404,
-                            errJson("Aluno não encontrado."),
-                            redirect(request, "alunos?erro=" + urlEncode("Aluno não encontrado.")));
+                    respond(response, json, 404, errJson("Aluno não encontrado."), "alunos?erro=Aluno+não+encontrado");
                     return;
                 }
 
-                // Se trocar CPF, precisa checar duplicidade
                 if (!safeEquals(existente.getCpf(), aluno.getCpf()) && dao.existeCpf(aluno.getCpf())) {
-                    respond(response, json, 409,
-                            errJson("CPF já cadastrado."),
-                            redirect(request, "alunos?erro=" + urlEncode("CPF já cadastrado.")));
+                    respond(response, json, 409, errJson("CPF já cadastrado."), "alunos?erro=CPF+já+cadastrado");
                     return;
                 }
 
                 dao.alterar(aluno);
 
-                respond(response, json, 200,
-                        okJson("Aluno atualizado com sucesso."),
-                        redirect(request, "alunos?msg=" + urlEncode("Aluno atualizado com sucesso.")));
+                respond(response, json, 200, okJson("Aluno atualizado com sucesso."), "alunos?msg=Aluno+atualizado");
                 return;
             }
 
-            // =========================
-            // DESATIVAR (delete/deactivate)
-            // =========================
-            if ("deactivate".equals(op) || "delete".equals(op)) {
-                Integer id = parseInt(nvl(request.getParameter("id"), request.getParameter("id_remover")));
+            if ("deactivate".equals(op)) {
+                Integer id = parseInt(request.getParameter("id"));
                 if (id == null || id <= 0) {
-                    respond(response, json, 400,
-                            errJson("ID inválido."),
-                            redirect(request, "alunos?erro=" + urlEncode("ID inválido.")));
+                    respond(response, json, 400, errJson("ID inválido."), "alunos?erro=ID+inválido");
                     return;
                 }
 
                 Aluno existente = dao.buscarPorId(id);
                 if (existente == null) {
-                    respond(response, json, 404,
-                            errJson("Aluno não encontrado."),
-                            redirect(request, "alunos?erro=" + urlEncode("Aluno não encontrado.")));
+                    respond(response, json, 404, errJson("Aluno não encontrado."), "alunos?erro=Aluno+não+encontrado");
                     return;
                 }
 
@@ -194,68 +172,47 @@ public class AlunoServlet extends HttpServlet {
                 if (!confirm) {
                     int count = dao.contarAulasFuturasMarcadas(id);
                     String payload = "{\"ok\":false,\"requiresConfirm\":true,\"count\":" + count
-                            + ",\"message\":\"Confirme para desativar. Isso irá desmarcar " + count + " aula(s) futura(s) marcada(s).\"}";
-                    // JSON: 409 para o front abrir modal.
-                    // HTML: redireciona com mensagem (o JSP pode mostrar e abrir modal).
-                    respond(response, json, 409,
-                            payload,
-                            redirect(request, "alunos?erro=" + urlEncode("Confirmação necessária para desativar (desmarca " + count + " futuras).")
-                                    + "&confirmRequired=true&id=" + id + "&count=" + count));
+                            + ",\"message\":\"Confirme para desativar. Isso irá desmarcar " + count + " aula(s) futura(s).\"}";
+                    respond(response, json, 409, payload, "alunos?erro=Confirmação+necessária");
                     return;
                 }
 
                 int desmarcadas = dao.desativarComDesmarcacaoFuturas(id, motivo, "user");
 
-                String okPayload = "{\"ok\":true,\"message\":\"Aluno desativado. Aulas futuras desmarcadas: "
-                        + desmarcadas + ".\",\"desmarcadas\":" + desmarcadas + "}";
+                String payload = "{\"ok\":true,"
+                        + "\"message\":\"Aluno desativado. Aulas futuras desmarcadas: " + desmarcadas + ".\","
+                        + "\"desmarcadas\":" + desmarcadas + "}";
 
-                respond(response, json, 200,
-                        okPayload,
-                        redirect(request, "alunos?msg=" + urlEncode("Aluno desativado. Aulas futuras desmarcadas: " + desmarcadas + ".")));
+                respond(response, json, 200, payload, "alunos?msg=Aluno+desativado");
                 return;
             }
 
-            // =========================
-            // ATIVAR
-            // =========================
             if ("activate".equals(op)) {
                 Integer id = parseInt(request.getParameter("id"));
                 if (id == null || id <= 0) {
-                    respond(response, json, 400,
-                            errJson("ID inválido."),
-                            redirect(request, "alunos?erro=" + urlEncode("ID inválido.")));
+                    respond(response, json, 400, errJson("ID inválido."), "alunos?erro=ID+inválido");
                     return;
                 }
 
                 Aluno existente = dao.buscarPorId(id);
                 if (existente == null) {
-                    respond(response, json, 404,
-                            errJson("Aluno não encontrado."),
-                            redirect(request, "alunos?erro=" + urlEncode("Aluno não encontrado.")));
+                    respond(response, json, 404, errJson("Aluno não encontrado."), "alunos?erro=Aluno+não+encontrado");
                     return;
                 }
 
                 String motivo = nvl(request.getParameter("motivo"), "").trim();
                 dao.ativar(id, motivo, "user");
 
-                respond(response, json, 200,
-                        okJson("Aluno ativado com sucesso."),
-                        redirect(request, "alunos?msg=" + urlEncode("Aluno ativado com sucesso.")));
+                respond(response, json, 200, okJson("Aluno ativado com sucesso."), "alunos?msg=Aluno+ativado");
                 return;
             }
 
-            respond(response, json, 400,
-                    errJson("Operação inválida."),
-                    redirect(request, "alunos?erro=" + urlEncode("Operação inválida.")));
-
+            respond(response, json, 400, errJson("Operação inválida."), "alunos?erro=Operação+inválida");
         } catch (IllegalArgumentException e) {
-            respond(response, json, 400,
-                    errJson(safeMsg(e)),
-                    redirect(request, "alunos?erro=" + urlEncode(safeMsg(e))));
+            respond(response, json, 400, errJson(safeMsg(e)), "alunos?erro=" + urlEncode(safeMsg(e)));
         } catch (RuntimeException e) {
-            respond(response, json, 500,
-                    errJson("Falha ao processar: " + safeMsg(e)),
-                    redirect(request, "alunos?erro=" + urlEncode("Falha ao processar.")));
+            getServletContext().log("[AlunoServlet] erro", e);
+            respond(response, json, 500, errJson("Falha ao processar: " + safeMsg(e)), "alunos?erro=Falha");
         }
     }
 
@@ -273,7 +230,7 @@ public class AlunoServlet extends HttpServlet {
         Aluno a = new Aluno();
 
         if (requireId) {
-            Integer id = parseInt(nvl(request.getParameter("id"), request.getParameter("id_alterar")));
+            Integer id = parseInt(request.getParameter("id"));
             if (id == null || id <= 0) throw new IllegalArgumentException("ID inválido.");
             a.setId(id);
         }
@@ -285,6 +242,7 @@ public class AlunoServlet extends HttpServlet {
         String categoria = nvl(request.getParameter("categoria_desejada"), "").trim().toUpperCase();
 
         String dn = nvl(request.getParameter("data_nascimento"), "").trim();
+        String dm = nvl(request.getParameter("data_matricula"), "").trim();
 
         a.setNome(nome);
         a.setCpf(cpf);
@@ -293,30 +251,21 @@ public class AlunoServlet extends HttpServlet {
         a.setCategoriaDesejada(categoria);
 
         if (!dn.isEmpty()) a.setDataNascimento(LocalDate.parse(dn));
-        a.setDataMatricula(LocalDate.now());
+        if (!dm.isEmpty()) a.setDataMatricula(LocalDate.parse(dm));
 
         return a;
     }
 
-    private void validateAluno(Aluno a, boolean isUpdate) {
+    private void validateAluno(Aluno a) {
         if (a.getNome() == null || a.getNome().trim().length() < 3) {
             throw new IllegalArgumentException("Nome deve ter pelo menos 3 caracteres.");
         }
         if (a.getCpf() == null || a.getCpf().length() != 11) {
-            throw new IllegalArgumentException("CPF inválido (precisa ter 11 dígitos).");
+            throw new IllegalArgumentException("CPF inválido (11 dígitos).");
         }
         if (a.getCategoriaDesejada() == null || a.getCategoriaDesejada().isBlank()) {
             throw new IllegalArgumentException("Categoria desejada é obrigatória.");
         }
-
-        // valida categorias comuns (ajuste se seu sistema aceitar outras)
-        String c = a.getCategoriaDesejada().trim().toUpperCase();
-        if (!(c.equals("A") || c.equals("B") || c.equals("AB") || c.equals("ACC") || c.equals("AC") || c.equals("AD") || c.equals("AE"))) {
-            // não trava se você quiser ser permissivo: comente esse if
-            // mas para "profissional", vale validar
-            // throw new IllegalArgumentException("Categoria desejada inválida (ex.: A, B, AB, ACC).");
-        }
-
         if (a.getEmail() != null && !a.getEmail().isBlank() && !a.getEmail().contains("@")) {
             throw new IllegalArgumentException("E-mail inválido.");
         }
@@ -328,12 +277,8 @@ public class AlunoServlet extends HttpServlet {
     private static boolean isJsonRequest(HttpServletRequest request) {
         String format = request.getParameter("format");
         if (format != null && "json".equalsIgnoreCase(format)) return true;
-
         String accept = request.getHeader("Accept");
-        if (accept != null && accept.toLowerCase().contains("application/json")) return true;
-
-        String ct = request.getContentType();
-        return ct != null && ct.toLowerCase().contains("application/json");
+        return accept != null && accept.toLowerCase().contains("application/json");
     }
 
     private static void writeJson(HttpServletResponse response, int status, String payload) throws IOException {
@@ -355,6 +300,7 @@ public class AlunoServlet extends HttpServlet {
     private static String alunoToJson(Aluno a) {
         String status = a.getStatus();
         if (status == null || status.isBlank()) status = "ATIVO";
+
         return "{"
             + "\"id\":" + a.getId() + ","
             + "\"nome\":\"" + jsonEscape(a.getNome()) + "\","
@@ -379,13 +325,9 @@ public class AlunoServlet extends HttpServlet {
         return sb.toString();
     }
 
-    private static void respond(HttpServletResponse response, boolean json, int status, String jsonBody, String redirectUrl)
-            throws IOException {
-        if (json) {
-            writeJson(response, status, jsonBody);
-        } else {
-            response.sendRedirect(redirectUrl);
-        }
+    private static void respond(HttpServletResponse response, boolean json, int status, String jsonBody, String redirectUrl) throws IOException {
+        if (json) writeJson(response, status, jsonBody);
+        else response.sendRedirect(redirectUrl);
     }
 
     // ---------------------------
@@ -421,20 +363,11 @@ public class AlunoServlet extends HttpServlet {
         return URLEncoder.encode(nvl(s), StandardCharsets.UTF_8);
     }
 
-    private static String redirect(HttpServletRequest request, String relative) {
-        // garante que funciona mesmo quando o projeto não está na raiz (/)
-        String ctx = request.getContextPath();
-        if (ctx == null) ctx = "";
-        if (!relative.startsWith("/")) relative = "/" + relative;
-        return ctx + relative;
-    }
-
     private static String jsonEscape(String s) {
         if (s == null) return "";
         return s.replace("\\", "\\\\")
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("</", "<\\/");
+                .replace("\r", "\\r");
     }
 }

@@ -13,12 +13,8 @@
       <div class="text-muted small">Dica: clique em <code class="kbd">Editar</code> para carregar os dados no formulário.</div>
     </div>
     <div class="d-flex gap-2">
-      <button class="btn btn-outline-secondary" id="btnReload">
-        <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
-      </button>
-      <button class="btn btn-primary" id="btnNew">
-        <i class="bi bi-plus-lg me-1"></i>Novo aluno
-      </button>
+      <button class="btn btn-outline-secondary" id="btnReload"><i class="bi bi-arrow-clockwise me-1"></i>Atualizar</button>
+      <button class="btn btn-primary" id="btnNew"><i class="bi bi-plus-lg me-1"></i>Novo aluno</button>
     </div>
   </div>
 
@@ -45,7 +41,7 @@
               <th>CPF</th>
               <th>Categoria</th>
               <th>Matrícula</th>
-              <th style="width:190px" class="text-end"></th>
+              <th style="width:190px"></th>
             </tr>
           </thead>
           <tbody id="tbody">
@@ -65,7 +61,6 @@
         <h5 class="modal-title" id="modalTitle">Aluno</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-
       <form class="modal-body needs-validation" id="form" novalidate>
         <input type="hidden" id="id" />
         <div class="row g-3">
@@ -74,7 +69,6 @@
             <input class="form-control" id="nome" required minlength="2" />
             <div class="invalid-feedback">Informe o nome (mín. 2 caracteres).</div>
           </div>
-
           <div class="col-12 col-md-4">
             <label class="form-label required">CPF</label>
             <input class="form-control" id="cpf" required maxlength="14" placeholder="000.000.000-00" />
@@ -85,7 +79,6 @@
             <label class="form-label">Telefone</label>
             <input class="form-control" id="telefone" placeholder="(00) 00000-0000" />
           </div>
-
           <div class="col-12 col-md-8">
             <label class="form-label">Email</label>
             <input class="form-control" id="email" type="email" placeholder="exemplo@dominio.com" />
@@ -97,7 +90,6 @@
             <input class="form-control" id="data_nascimento" type="date" required />
             <div class="invalid-feedback">Informe a data de nascimento.</div>
           </div>
-
           <div class="col-12 col-md-4">
             <label class="form-label required">Categoria</label>
             <select class="form-select" id="categoria_desejada" required>
@@ -111,7 +103,6 @@
             </select>
             <div class="invalid-feedback">Selecione a categoria.</div>
           </div>
-
           <div class="col-12 col-md-4">
             <label class="form-label required">Matrícula</label>
             <input class="form-control" id="data_matricula" type="date" required />
@@ -119,31 +110,26 @@
           </div>
         </div>
       </form>
-
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="btnSave">
-          <i class="bi bi-save me-1"></i>Salvar
-        </button>
+        <button type="button" class="btn btn-primary" id="btnSave"><i class="bi bi-save me-1"></i>Salvar</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Modal: Confirmar Desativação/Ativação -->
+<!-- Modal: Status (Desativar/Ativar) -->
 <div class="modal fade" id="modalStatus" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="modalStatusTitle">Confirmar ação</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-
       <div class="modal-body">
         <div class="alert alert-warning mb-3" id="modalStatusWarn" style="display:none;">
-          <strong>Atenção:</strong> ao desativar este aluno, todas as aulas futuras <b>MARCADAS</b> serão automaticamente
-          <b>DESMARCADAS</b>, mantendo histórico.
-          <div class="small text-muted mt-1" id="modalAulasInfo"></div>
+          <strong>Atenção:</strong> ao desativar este aluno, todas as aulas futuras <b>MARCADAS/AGENDADAS</b> serão automaticamente <b>DESMARCADAS</b>, mantendo histórico.
+          <div class="small text-muted mt-2" id="modalAulasInfo"></div>
         </div>
 
         <div class="mb-3">
@@ -153,21 +139,38 @@
           <div class="form-text">Esse motivo fica registrado no histórico.</div>
         </div>
 
+        <div id="aulasBox" style="display:none;">
+          <h6 class="mb-2">Aulas que serão desmarcadas</h6>
+          <div class="table-responsive" style="max-height: 260px;">
+            <table class="table table-sm table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th style="width:70px;">ID</th>
+                  <th>Data/Hora</th>
+                  <th>Status</th>
+                  <th style="width:90px;">Instr.</th>
+                  <th style="width:90px;">Veíc.</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyAulas">
+                <tr><td colspan="5" class="text-muted">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <input type="hidden" id="statusTargetId" />
         <input type="hidden" id="statusTargetAction" />
       </div>
-
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="button" class="btn btn-warning" id="btnConfirmStatus">
-          <i class="bi bi-check2-circle me-1"></i>Confirmar
-        </button>
+        <button type="button" class="btn btn-warning" id="btnConfirmStatus"><i class="bi bi-check2-circle me-1"></i>Confirmar</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Toasts -->
+<!-- Toast -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080">
   <div id="toast" class="toast align-items-center" role="alert" aria-live="assertive" aria-atomic="true">
     <div class="d-flex">
@@ -177,23 +180,25 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
   const BASE = '<%= request.getContextPath() %>';
-  const API = BASE + '/alunos';
+  const API_ALUNOS = BASE + '/alunos';
+  const API_AULAS  = BASE + '/aulas';
 
   const tbody = document.getElementById('tbody');
   const search = document.getElementById('search');
   const count = document.getElementById('count');
 
-  const modalForm = new bootstrap.Modal(document.getElementById('modalForm'));
-  const modalStatus = new bootstrap.Modal(document.getElementById('modalStatus'));
+  const modalForm = new bootstrap.Modal('#modalForm');
+  const modalStatus = new bootstrap.Modal('#modalStatus');
 
   const toastEl = document.getElementById('toast');
   const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
   const toastMsg = document.getElementById('toastMsg');
 
   const form = document.getElementById('form');
-
   const fields = {
     id: document.getElementById('id'),
     nome: document.getElementById('nome'),
@@ -215,14 +220,23 @@
     toast.show();
   }
 
-  function qsParam(name) {
-    return new URLSearchParams(window.location.search).get(name);
+  function applyMaskCPF(value) {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    const parts = [];
+    parts.push(digits.slice(0, 3));
+    if (digits.length >= 4) parts.push(digits.slice(3, 6));
+    if (digits.length >= 7) parts.push(digits.slice(6, 9));
+    let out = parts.filter(Boolean).join('.');
+    if (digits.length >= 10) out += '-' + digits.slice(9, 11);
+    return out;
   }
 
+  fields.cpf.addEventListener('input', (e) => {
+    e.target.value = applyMaskCPF(e.target.value);
+  });
+
   function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-    }[c]));
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   }
 
   function statusBadge(status) {
@@ -231,26 +245,8 @@
     return `<span class="badge ${cls} ms-2">${escapeHtml(st)}</span>`;
   }
 
-  function applyMaskCPF(value) {
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    const p1 = digits.slice(0, 3);
-    const p2 = digits.slice(3, 6);
-    const p3 = digits.slice(6, 9);
-    const p4 = digits.slice(9, 11);
-
-    let out = p1;
-    if (p2) out += '.' + p2;
-    if (p3) out += '.' + p3;
-    if (p4) out += '-' + p4;
-    return out;
-  }
-
-  fields.cpf.addEventListener('input', (e) => {
-    e.target.value = applyMaskCPF(e.target.value);
-  });
-
-  async function apiGet(op, params = {}) {
-    const url = new URL(API, window.location.href);
+  async function apiGet(baseUrl, op, params = {}) {
+    const url = new URL(baseUrl, window.location.origin);
     url.searchParams.set('format', 'json');
     url.searchParams.set('op', op);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -261,8 +257,8 @@
     return data;
   }
 
-  async function apiPost(op, body) {
-    const res = await fetch(API + '?format=json', {
+  async function apiPost(baseUrl, op, body) {
+    const res = await fetch(baseUrl + '?format=json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', 'Accept': 'application/json' },
       body: new URLSearchParams({ op, ...body }).toString()
@@ -274,32 +270,31 @@
 
   function renderTable(list) {
     tbody.innerHTML = '';
-
     if (!list.length) {
       tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Nenhum registro.</td></tr>';
       count.textContent = '0 registros';
       return;
     }
-
     count.textContent = `${list.length} registro(s)`;
 
     for (const a of list) {
+      const st = String(a.status || 'ATIVO').toUpperCase();
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="text-muted">${a.id}</td>
         <td>
-          <div class="fw-semibold">${escapeHtml(a.nome)} ${statusBadge(a.status)}</div>
+          <div class="fw-semibold">${escapeHtml(a.nome)} ${statusBadge(st)}</div>
           <div class="text-muted small">${escapeHtml(a.email || '')}</div>
         </td>
-        <td>${escapeHtml(a.cpf)}</td>
+        <td>${escapeHtml(applyMaskCPF(a.cpf || ''))}</td>
         <td><span class="badge text-bg-light border">${escapeHtml(a.categoria_desejada)}</span></td>
         <td>${escapeHtml(a.data_matricula)}</td>
         <td class="text-end">
           <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${a.id}" title="Editar">
             <i class="bi bi-pencil-square"></i>
           </button>
-
-          ${String((a.status||'ATIVO')).toUpperCase() === 'INATIVO'
+          ${st === 'INATIVO'
             ? `<button class="btn btn-sm btn-outline-success" data-action="activate" data-id="${a.id}" title="Ativar">
                  <i class="bi bi-person-check"></i>
                </button>`
@@ -326,7 +321,7 @@
     document.getElementById('modalTitle').textContent = `Editar aluno #${a.id}`;
     fields.id.value = a.id;
     fields.nome.value = a.nome || '';
-    fields.cpf.value = a.cpf || '';
+    fields.cpf.value = applyMaskCPF(a.cpf || '');
     fields.telefone.value = a.telefone || '';
     fields.email.value = a.email || '';
     fields.data_nascimento.value = a.data_nascimento || '';
@@ -339,8 +334,7 @@
   async function load() {
     tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
     try {
-      const resp = await apiGet('list');
-      // servlet -> {ok:true,data:[...]}
+      const resp = await apiGet(API_ALUNOS, 'list');
       rows = resp.data || [];
       applyFilter();
     } catch (e) {
@@ -351,7 +345,6 @@
   function applyFilter() {
     const q = (search.value || '').toLowerCase();
     if (!q) return renderTable(rows);
-
     const filtered = rows.filter(r =>
       (r.nome || '').toLowerCase().includes(q) ||
       (r.cpf || '').toLowerCase().includes(q) ||
@@ -367,7 +360,7 @@
     const payload = {
       id: fields.id.value,
       nome: fields.nome.value,
-      cpf: fields.cpf.value,
+      cpf: String(fields.cpf.value || '').replace(/\D/g, ''),
       telefone: fields.telefone.value,
       email: fields.email.value,
       data_nascimento: fields.data_nascimento.value,
@@ -377,13 +370,19 @@
 
     try {
       const isUpdate = !!payload.id;
-      const res = await apiPost(isUpdate ? 'update' : 'create', payload);
+      const res = await apiPost(API_ALUNOS, isUpdate ? 'update' : 'create', payload);
       modalForm.hide();
       showToast(res.message || 'Salvo com sucesso.');
       await load();
     } catch (e) {
       showToast(e.message, true);
     }
+  }
+
+  function fmtData(s) {
+    if (!s) return '';
+    // vem ISO "2026-02-10T10:00" etc
+    return s.replace('T', ' ').slice(0, 16);
   }
 
   async function openStatusModal(row, action) {
@@ -398,28 +397,52 @@
 
     const warn = document.getElementById('modalStatusWarn');
     const info = document.getElementById('modalAulasInfo');
-    const btn = document.getElementById('btnConfirmStatus');
+    const aulasBox = document.getElementById('aulasBox');
+    const tbodyAulas = document.getElementById('tbodyAulas');
+    tbodyAulas.innerHTML = '<tr><td colspan="5" class="text-muted">Carregando...</td></tr>';
 
     if (action === 'deactivate') {
       warn.style.display = '';
-      info.textContent = 'Carregando...';
-
-      btn.className = 'btn btn-warning';
-      btn.innerHTML = '<i class="bi bi-person-x me-1"></i>Desativar';
-
-      try {
-        const r = await apiGet('future_count', { id: row.id });
-        const qtd = (r && typeof r.count !== 'undefined') ? r.count : 0;
-        info.textContent = `Aulas futuras marcadas a desmarcar: ${qtd}`;
-      } catch {
-        info.textContent = '';
-      }
-    } else {
-      warn.style.display = 'none';
+      aulasBox.style.display = '';
       info.textContent = '';
 
-      btn.className = 'btn btn-success';
-      btn.innerHTML = '<i class="bi bi-person-check me-1"></i>Ativar';
+      document.getElementById('btnConfirmStatus').className = 'btn btn-warning';
+
+      // 1) contagem (seu endpoint já existe)
+      apiGet(API_ALUNOS, 'future_count', { id: row.id })
+        .then((r) => { if (r && typeof r.count !== 'undefined') info.textContent = `Aulas futuras marcadas a desmarcar: ${r.count}`; })
+        .catch(() => { info.textContent = 'Não foi possível obter a contagem.'; });
+
+      // 2) lista (endpoint novo em /aulas)
+      apiGet(API_AULAS, 'future_by_aluno', { aluno_id: row.id })
+        .then((r) => {
+          const list = r.data || [];
+          if (!list.length) {
+            tbodyAulas.innerHTML = '<tr><td colspan="5" class="text-muted">Nenhuma aula futura marcada.</td></tr>';
+            return;
+          }
+          tbodyAulas.innerHTML = '';
+          for (const a of list) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td class="text-muted">${a.id}</td>
+              <td>${escapeHtml(fmtData(a.data_aula))}</td>
+              <td><span class="badge text-bg-light border">${escapeHtml(a.status)}</span></td>
+              <td>${escapeHtml(a.instrutor_id)}</td>
+              <td>${escapeHtml(a.veiculo_id)}</td>
+            `;
+            tbodyAulas.appendChild(tr);
+          }
+        })
+        .catch((e) => {
+          tbodyAulas.innerHTML = `<tr><td colspan="5" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
+        });
+
+    } else {
+      warn.style.display = 'none';
+      aulasBox.style.display = 'none';
+      info.textContent = '';
+      document.getElementById('btnConfirmStatus').className = 'btn btn-success';
     }
 
     modalStatus.show();
@@ -429,13 +452,14 @@
     if (!statusTarget) return;
 
     const motivo = document.getElementById('motivoStatus').value || '';
+
     try {
       if (statusTarget.action === 'deactivate') {
-        const res = await apiPost('deactivate', { id: statusTarget.id, confirm: true, motivo });
+        const res = await apiPost(API_ALUNOS, 'deactivate', { id: statusTarget.id, confirm: true, motivo });
         modalStatus.hide();
         showToast(res.message || 'Aluno desativado.');
-      } else if (statusTarget.action === 'activate') {
-        const res = await apiPost('activate', { id: statusTarget.id, motivo });
+      } else {
+        const res = await apiPost(API_ALUNOS, 'activate', { id: statusTarget.id, motivo });
         modalStatus.hide();
         showToast(res.message || 'Aluno ativado.');
       }
@@ -465,24 +489,17 @@
 
     if (action === 'edit') {
       try {
-        const detail = await apiGet('get', { id });
+        const detail = await apiGet(API_ALUNOS, 'get', { id });
         openEdit(detail);
       } catch (err) {
         showToast(err.message, true);
       }
-      return;
     }
 
     if (action === 'deactivate' || action === 'activate') {
-      await openStatusModal(row, action);
-      return;
+      openStatusModal(row, action);
     }
   });
-
-  const msg = qsParam('msg');
-  const err = qsParam('erro');
-  if (msg) showToast(msg);
-  if (err) showToast(err, true);
 
   load();
 </script>

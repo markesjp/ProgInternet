@@ -86,7 +86,7 @@
           <h5 class="modal-title" id="modalTitle">Aluno</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
-        <form class="modal-body" id="form">
+        <form class="modal-body needs-validation" id="form" novalidate>
           <input type="hidden" id="id" />
           <div class="row g-3">
             <div class="col-12 col-md-8">
@@ -175,7 +175,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    const API = 'alunos';
+    // ⚠️ IMPORTANTE: em Tomcat (ex.: /Trabalho5), isso evita chamar /alunos fora do contexto.
+    // Se você abrir esse HTML "solto" no filesystem (file://), o contextPath não existe.
+    const CONTEXT = (location.pathname.split('/')[1] ? '/' + location.pathname.split('/')[1] : '');
+    const API = CONTEXT + '/alunos';
+
     const tbody = document.getElementById('tbody');
     const search = document.getElementById('search');
     const count = document.getElementById('count');
@@ -224,15 +228,20 @@
     }
 
     fields.cpf.addEventListener('input', (e) => {
-      const cur = e.target.value;
-      e.target.value = applyMaskCPF(cur);
+      e.target.value = applyMaskCPF(e.target.value);
     });
 
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+
     async function apiGet(op, params = {}) {
-      const url = new URL(API, window.location.href);
+      // monta URL absoluta no mesmo host, evitando bug de base url
+      const url = new URL(API, window.location.origin);
       url.searchParams.set('format', 'json');
       url.searchParams.set('op', op);
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
       const res = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.message || 'Erro inesperado');
@@ -267,20 +276,20 @@
             <div class="fw-semibold">${escapeHtml(a.nome)}</div>
             <div class="text-muted small">${escapeHtml(a.email || '')}</div>
           </td>
-          <td>${escapeHtml(a.cpf)}</td>
+          <td>${escapeHtml(applyMaskCPF(a.cpf || ''))}</td>
           <td><span class="badge text-bg-light border">${escapeHtml(a.categoria_desejada)}</span></td>
           <td>${escapeHtml(a.data_matricula)}</td>
           <td class="text-end">
-            <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${a.id}"><i class="bi bi-pencil-square"></i></button>
-            <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${a.id}"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-sm btn-outline-primary me-1" data-action="edit" data-id="${a.id}">
+              <i class="bi bi-pencil-square"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${a.id}">
+              <i class="bi bi-trash"></i>
+            </button>
           </td>
         `;
         tbody.appendChild(tr);
       }
-    }
-
-    function escapeHtml(s) {
-      return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
 
     function openNew() {
@@ -296,7 +305,7 @@
       document.getElementById('modalTitle').textContent = `Editar aluno #${a.id}`;
       fields.id.value = a.id;
       fields.nome.value = a.nome || '';
-      fields.cpf.value = a.cpf || '';
+      fields.cpf.value = applyMaskCPF(a.cpf || '');
       fields.telefone.value = a.telefone || '';
       fields.email.value = a.email || '';
       fields.data_nascimento.value = a.data_nascimento || '';
@@ -307,20 +316,20 @@
     }
 
     async function load() {
-    	  tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
-    	  try {
-    	    const resp = await apiGet('list');
-    	    rows = resp.data || [];   // <<< AQUI
-    	    applyFilter();
-    	  } catch (e) {
-    	    tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
-    	  }
-    	}
-
+      tbody.innerHTML = '<tr><td colspan="6" class="text-muted">Carregando...</td></tr>';
+      try {
+        const resp = await apiGet('list');
+        rows = resp.data || [];  // ✅ seu backend retorna {ok:true,data:[...]}
+        applyFilter();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${escapeHtml(e.message)}</td></tr>`;
+      }
+    }
 
     function applyFilter() {
       const q = (search.value || '').toLowerCase();
       if (!q) return renderTable(rows);
+
       const filtered = rows.filter(r =>
         (r.nome || '').toLowerCase().includes(q) ||
         (r.cpf || '').toLowerCase().includes(q) ||
@@ -336,7 +345,7 @@
       const payload = {
         id: fields.id.value,
         nome: fields.nome.value,
-        cpf: fields.cpf.value,
+        cpf: String(fields.cpf.value || '').replace(/\D/g, ''), // ✅ manda só dígitos
         telefone: fields.telefone.value,
         email: fields.email.value,
         data_nascimento: fields.data_nascimento.value,
@@ -358,6 +367,8 @@
     async function confirmDelete() {
       if (!deleteTarget) return;
       try {
+        // ⚠️ Se seu servlet NÃO tem op=delete, isso vai falhar.
+        // Se a regra é "desativar" e não excluir, troque para op='deactivate' e confirme.
         const res = await apiPost('delete', { id: deleteTarget.id });
         modalDelete.hide();
         showToast(res.message || 'Excluído com sucesso.');
@@ -378,13 +389,13 @@
     tbody.addEventListener('click', async (e) => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
+
       const id = btn.getAttribute('data-id');
       const action = btn.getAttribute('data-action');
       const row = rows.find(r => String(r.id) === String(id));
       if (!row) return;
 
       if (action === 'edit') {
-        // Pega detalhe (garante campos completos)
         try {
           const detail = await apiGet('get', { id });
           openEdit(detail);
@@ -401,7 +412,6 @@
       }
     });
 
-    // Mensagens vindas de redirect (fallback)
     const msg = qsParam('msg');
     const err = qsParam('erro');
     if (msg) showToast(msg);

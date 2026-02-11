@@ -19,6 +19,7 @@
 
           <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-dark" href="<%= request.getContextPath() %>/home">Ir para Home</a>
+            <a class="btn btn-outline-success" href="<%= request.getContextPath() %>/upload"><i class="bi bi-upload me-1"></i>Uploads</a>
             <a class="btn btn-outline-secondary" href="<%= request.getContextPath() %>/login">Voltar</a>
           </div>
 
