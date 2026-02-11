@@ -19,15 +19,25 @@ public class DownloadServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
     private Path uploadsBaseDir;
+    private Path uploadsPublicDir;
 
     @Override
     public void init() throws ServletException {
         super.init();
+
         String real = getServletContext().getRealPath("/WEB-INF/uploads");
         if (real != null) uploadsBaseDir = Paths.get(real);
         else uploadsBaseDir = Paths.get(System.getProperty("java.io.tmpdir"), "autoescola_uploads");
 
-        getServletContext().log("[DownloadServlet] uploadsBaseDir=" + uploadsBaseDir);
+        uploadsPublicDir = uploadsBaseDir.resolve("public");
+
+        try {
+            Files.createDirectories(uploadsPublicDir);
+        } catch (IOException e) {
+            throw new ServletException("Falha ao criar pasta public de uploads.", e);
+        }
+
+        getServletContext().log("[DownloadServlet] uploadsPublicDir=" + uploadsPublicDir);
     }
 
     @Override
@@ -50,7 +60,6 @@ public class DownloadServlet extends HttpServlet {
             return;
         }
 
-        // 1) suporte a 1 arquivo via ?id=...
         String id = req.getParameter("id");
         if (id != null && !id.isBlank()) {
             UploadServlet.DocInfo info = sessionFiles.get(id);
@@ -58,11 +67,10 @@ public class DownloadServlet extends HttpServlet {
                 redirectErro(req, resp, "Arquivo não encontrado na sessão.");
                 return;
             }
-            streamSingle(req, resp, info);
+            streamSingle(resp, info);
             return;
         }
 
-        // 2) suporte a múltiplos via ?ids=1&ids=2 (checkbox)
         String[] ids = req.getParameterValues("ids");
         if (ids == null || ids.length == 0) {
             redirectErro(req, resp, "Selecione ao menos 1 arquivo para baixar.");
@@ -77,23 +85,20 @@ public class DownloadServlet extends HttpServlet {
         }
 
         if (selected.isEmpty()) {
-            redirectErro(req, resp, "Seleção inválida. Nenhum arquivo encontrado para os IDs informados.");
+            redirectErro(req, resp, "Seleção inválida.");
             return;
         }
 
         if (selected.size() == 1) {
-            streamSingle(req, resp, selected.get(0));
+            streamSingle(resp, selected.get(0));
             return;
         }
 
-        streamZip(req, resp, selected);
+        streamZip(resp, selected);
     }
 
-    // =========================
-    // Download 1 arquivo
-    // =========================
-    private void streamSingle(HttpServletRequest req, HttpServletResponse resp, UploadServlet.DocInfo info) throws IOException {
-        Path base = uploadsBaseDir.resolve("public").normalize().toAbsolutePath();
+    private void streamSingle(HttpServletResponse resp, UploadServlet.DocInfo info) throws IOException {
+        Path base = uploadsPublicDir.normalize().toAbsolutePath();
         Path file = base.resolve(info.storedName).normalize().toAbsolutePath();
 
         if (!file.startsWith(base)) {
@@ -101,7 +106,7 @@ public class DownloadServlet extends HttpServlet {
             return;
         }
         if (!Files.exists(file) || !Files.isRegularFile(file)) {
-            redirectErro(req, resp, "Arquivo não existe mais no disco.");
+            resp.sendError(404, "Arquivo não existe mais no disco.");
             return;
         }
 
@@ -111,10 +116,10 @@ public class DownloadServlet extends HttpServlet {
             if (contentType == null) contentType = "application/octet-stream";
         }
 
+        String downloadName = safeDownloadName(info.originalName);
+
         resp.setContentType(contentType);
         resp.setHeader("X-Content-Type-Options", "nosniff");
-
-        String downloadName = safeDownloadName(info.originalName);
         resp.setHeader("Content-Disposition",
                 "attachment; filename=\"" + downloadName + "\"; filename*=UTF-8''" + encodeRFC5987(downloadName));
 
@@ -126,11 +131,8 @@ public class DownloadServlet extends HttpServlet {
         }
     }
 
-    // =========================
-    // Download ZIP (vários)
-    // =========================
-    private void streamZip(HttpServletRequest req, HttpServletResponse resp, List<UploadServlet.DocInfo> files) throws IOException {
-        Path base = uploadsBaseDir.resolve("public").normalize().toAbsolutePath();
+    private void streamZip(HttpServletResponse resp, List<UploadServlet.DocInfo> files) throws IOException {
+        Path base = uploadsPublicDir.normalize().toAbsolutePath();
 
         String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String zipName = "comprovantes_" + ts + ".zip";
@@ -140,7 +142,6 @@ public class DownloadServlet extends HttpServlet {
         resp.setHeader("Content-Disposition",
                 "attachment; filename=\"" + zipName + "\"; filename*=UTF-8''" + encodeRFC5987(zipName));
 
-        // para não explodir o ZIP com nomes repetidos
         Set<String> usedNames = new HashSet<>();
 
         try (ZipOutputStream zos = new ZipOutputStream(resp.getOutputStream())) {
@@ -151,11 +152,8 @@ public class DownloadServlet extends HttpServlet {
                 if (!file.startsWith(base)) continue;
                 if (!Files.exists(file) || !Files.isRegularFile(file)) continue;
 
-                String entryName = safeZipEntryName(info.originalName);
-                entryName = uniqueName(entryName, usedNames);
-
-                ZipEntry entry = new ZipEntry(entryName);
-                zos.putNextEntry(entry);
+                String entryName = uniqueName(safeZipEntryName(info.originalName), usedNames);
+                zos.putNextEntry(new ZipEntry(entryName));
 
                 try (InputStream in = Files.newInputStream(file)) {
                     in.transferTo(zos);
@@ -167,9 +165,6 @@ public class DownloadServlet extends HttpServlet {
         }
     }
 
-    // =========================
-    // Helpers
-    // =========================
     private void redirectErro(HttpServletRequest req, HttpServletResponse resp, String msg) throws IOException {
         resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url(msg));
     }
@@ -180,7 +175,6 @@ public class DownloadServlet extends HttpServlet {
     }
 
     private static String safeZipEntryName(String name) {
-        // Evita path dentro do zip (../ etc)
         if (name == null || name.isBlank()) return "arquivo.bin";
         String n = name.replace("\\", "/");
         int lastSlash = n.lastIndexOf('/');

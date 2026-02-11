@@ -2,9 +2,7 @@ package autoescola.controller;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -20,16 +18,6 @@ import org.apache.commons.fileupload2.javax.JavaxServletDiskFileUpload;
 import org.apache.commons.fileupload2.javax.JavaxServletFileUpload;
 import org.apache.commons.io.FilenameUtils;
 
-/**
- * UploadServlet (N arquivos, sem banco)
- *
- * - Salva arquivos em disco (WEB-INF/uploads/anon/...)
- * - Guarda metadados na sessão: Map<id, DocInfo> em "uploadedFilesV2"
- * - Campo do form: <input type="file" name="arquivos" multiple>
- * - Campo categoria: <select name="categoria">
- *
- * SEM LOGIN: upload liberado.
- */
 @WebServlet("/upload")
 public class UploadServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
@@ -38,6 +26,7 @@ public class UploadServlet extends HttpServlet {
 
     private Path tempRepository;
     private Path uploadsBaseDir;
+    private Path uploadsPublicDir;
 
     @Override
     public void init() throws ServletException {
@@ -57,15 +46,19 @@ public class UploadServlet extends HttpServlet {
             uploadsBaseDir = Paths.get(System.getProperty("java.io.tmpdir"), "autoescola_uploads");
         }
 
+        uploadsPublicDir = uploadsBaseDir.resolve("public");
+
         try {
             Files.createDirectories(tempRepository);
             Files.createDirectories(uploadsBaseDir);
+            Files.createDirectories(uploadsPublicDir);
         } catch (IOException e) {
             throw new ServletException("Falha ao criar diretórios de upload.", e);
         }
 
         getServletContext().log("[UploadServlet] tempRepository=" + tempRepository);
         getServletContext().log("[UploadServlet] uploadsBaseDir=" + uploadsBaseDir);
+        getServletContext().log("[UploadServlet] uploadsPublicDir=" + uploadsPublicDir);
     }
 
     @Override
@@ -76,8 +69,8 @@ public class UploadServlet extends HttpServlet {
         HttpSession session = req.getSession(true);
 
         @SuppressWarnings("unchecked")
-        Map<String, UploadServlet.DocInfo> sessionFiles =
-                (Map<String, UploadServlet.DocInfo>) session.getAttribute(SESSION_FILES_KEY_V2);
+        Map<String, DocInfo> sessionFiles =
+                (Map<String, DocInfo>) session.getAttribute(SESSION_FILES_KEY_V2);
 
         if (sessionFiles == null) sessionFiles = new LinkedHashMap<>();
 
@@ -135,11 +128,6 @@ public class UploadServlet extends HttpServlet {
                 return;
             }
 
-            // ✅ Sem login: salva em uma pasta padrão "anon"
-            String safeUser = "anon";
-            Path userDir = uploadsBaseDir.resolve(safeUser);
-            Files.createDirectories(userDir);
-
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
 
             @SuppressWarnings("unchecked")
@@ -155,15 +143,25 @@ public class UploadServlet extends HttpServlet {
                 String original = safeOriginalName(f.getName());
                 String stored = ts + "_" + id + "_" + original;
 
-                Path dest = userDir.resolve(stored).normalize().toAbsolutePath();
-                Path base = userDir.normalize().toAbsolutePath();
+                Path dest = uploadsPublicDir.resolve(stored).normalize().toAbsolutePath();
+                Path base = uploadsPublicDir.normalize().toAbsolutePath();
 
                 if (!dest.startsWith(base)) {
                     getServletContext().log("[UploadServlet] tentativa de path traversal: " + dest);
                     continue;
                 }
 
+                // garante pasta
+                Files.createDirectories(uploadsPublicDir);
+
+                // grava
                 f.write(dest);
+
+                // sanity check
+                if (!Files.exists(dest) || !Files.isRegularFile(dest)) {
+                    getServletContext().log("[UploadServlet] arquivo não foi criado após write(): " + dest);
+                    continue;
+                }
 
                 DocInfo info = new DocInfo();
                 info.id = id;
@@ -195,8 +193,6 @@ public class UploadServlet extends HttpServlet {
         }
     }
 
-    // ===== Helpers =====
-
     private static String safeOriginalName(String original) {
         String base = FilenameUtils.getName(original == null ? "" : original);
         if (base.isBlank()) base = "arquivo.bin";
@@ -204,11 +200,7 @@ public class UploadServlet extends HttpServlet {
     }
 
     private static String url(String s) {
-        try {
-            return java.net.URLEncoder.encode(s, "UTF-8");
-        } catch (Exception e) {
-            return s;
-        }
+        try { return java.net.URLEncoder.encode(s, "UTF-8"); } catch (Exception e) { return s; }
     }
 
     public static class DocInfo {
