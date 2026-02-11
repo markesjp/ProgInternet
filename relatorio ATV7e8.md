@@ -72,7 +72,7 @@
 - É incluído nas páginas principais com:
   ```jsp
   <jsp:include page="/WEB-INF/jsp/components/header.jsp" />
-````
+
 
 * Quando o JSP principal é renderizado, o container “injeta” o HTML do header naquele ponto.
 
