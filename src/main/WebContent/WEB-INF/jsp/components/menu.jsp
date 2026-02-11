@@ -15,8 +15,7 @@
         <li class="nav-item"><a class="nav-link" href="<%= request.getContextPath() %>/instrutores">Instrutores</a></li>
         <li class="nav-item"><a class="nav-link" href="<%= request.getContextPath() %>/veiculos">Veículos</a></li>
         <li class="nav-item"><a class="nav-link" href="<%= request.getContextPath() %>/aulas">Aulas</a></li>
-        <li class="nav-item"><a class="nav-link" href="<%= request.getContextPath() %>/busca-aluno">Busca (JSP forward)</a></li>
-      </ul>
+	</ul>
       <ul class="navbar-nav ms-auto">
         <li class="nav-item"><a class="nav-link" href="<%= request.getContextPath() %>/login_form">Login</a></li>
       </ul>

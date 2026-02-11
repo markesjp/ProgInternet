@@ -14,6 +14,7 @@ import autoescola.dao.AlunoDao;
 import autoescola.dao.AulaDao;
 import autoescola.dao.InstrutorDao;
 import autoescola.dao.VeiculoDao;
+import autoescola.model.Aluno;
 import autoescola.model.Aula;
 import autoescola.model.AulaDetalhada;
 
@@ -28,6 +29,9 @@ import autoescola.model.AulaDetalhada;
  * NOVO:
  * - op=future_by_aluno (JSON): lista aulas futuras MARCADAS/AGENDADAS de um aluno
  *   com JOIN (AulaDetalhada) para modal de desativação do aluno.
+ *
+ * REGRA:
+ * - Aluno INATIVO não pode marcar novas aulas (create) nem atualizar aula para aluno INATIVO.
  */
 @WebServlet("/aulas")
 public class AulaServlet extends HttpServlet {
@@ -73,6 +77,8 @@ public class AulaServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
+        // Se não for JSON, entrega a página JSP
         if (!isJsonRequest(request)) {
             request.getRequestDispatcher("/WEB-INF/jsp/pages/aulas.jsp").forward(request, response);
             return;
@@ -142,6 +148,10 @@ public class AulaServlet extends HttpServlet {
             if ("create".equals(op)) {
                 Aula a = readAulaFromRequest(request, false);
                 validateAula(a, false);
+
+                // ✅ REGRA: aluno inativo não marca aula
+                ensureAlunoAtivo(a.getAlunoId());
+
                 aulaDao.inserir(a);
                 respond(response, json, 200, okJson("Aula cadastrada com sucesso."), "aulas?msg=Aula+cadastrada");
                 return;
@@ -156,6 +166,11 @@ public class AulaServlet extends HttpServlet {
                     respond(response, json, 404, errJson("Aula não encontrada."), "aulas?erro=Aula+não+encontrada");
                     return;
                 }
+
+                // ✅ REGRA: se tentar alterar/reatribuir para aluno INATIVO, bloqueia
+                // (Mesmo que o alunoId não tenha mudado, continua valendo)
+                ensureAlunoAtivo(a.getAlunoId());
+
                 aulaDao.alterar(a);
                 respond(response, json, 200, okJson("Aula atualizada com sucesso."), "aulas?msg=Aula+atualizada");
                 return;
@@ -182,6 +197,21 @@ public class AulaServlet extends HttpServlet {
             respond(response, json, 400, errJson(safeMsg(e)), "aulas?erro=" + urlEncode(safeMsg(e)));
         } catch (RuntimeException e) {
             respond(response, json, 500, errJson("Falha ao processar: " + safeMsg(e)), "aulas?erro=Falha+ao+processar");
+        }
+    }
+
+    // --------------------------
+    // Regras de Negócio
+    // --------------------------
+    private void ensureAlunoAtivo(Integer alunoId) {
+        if (alunoId == null || alunoId <= 0) throw new IllegalArgumentException("Aluno é obrigatório.");
+
+        Aluno aluno = alunoDao.buscarPorId(alunoId);
+        if (aluno == null) throw new IllegalArgumentException("Aluno não encontrado (ID=" + alunoId + ").");
+
+        String st = aluno.getStatus();
+        if (st != null && "INATIVO".equalsIgnoreCase(st.trim())) {
+            throw new IllegalArgumentException("Aluno INATIVO não pode marcar/alterar aulas. Ative o aluno para continuar.");
         }
     }
 
@@ -326,6 +356,9 @@ public class AulaServlet extends HttpServlet {
         return accept != null && accept.toLowerCase().contains("application/json");
     }
 
+    // --------------------------
+    // Utils
+    // --------------------------
     private static String trim(String s) { return s == null ? "" : s.trim(); }
     private static boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
 

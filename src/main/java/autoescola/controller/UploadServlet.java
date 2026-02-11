@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 import javax.servlet.ServletException;
-import javax.servlet.annotation.WebServlet; 
+import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
 
 import org.apache.commons.fileupload2.core.DiskFileItem;
@@ -23,10 +23,12 @@ import org.apache.commons.io.FilenameUtils;
 /**
  * UploadServlet (N arquivos, sem banco)
  *
- * - Salva arquivos em disco (WEB-INF/uploads/<usuario>/...)
+ * - Salva arquivos em disco (WEB-INF/uploads/anon/...)
  * - Guarda metadados na sessão: Map<id, DocInfo> em "uploadedFilesV2"
  * - Campo do form: <input type="file" name="arquivos" multiple>
  * - Campo categoria: <select name="categoria">
+ *
+ * SEM LOGIN: upload liberado.
  */
 @WebServlet("/upload")
 public class UploadServlet extends HttpServlet {
@@ -67,19 +69,31 @@ public class UploadServlet extends HttpServlet {
     }
 
     @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        req.setCharacterEncoding("UTF-8");
+        resp.setCharacterEncoding("UTF-8");
+
+        HttpSession session = req.getSession(true);
+
+        @SuppressWarnings("unchecked")
+        Map<String, UploadServlet.DocInfo> sessionFiles =
+                (Map<String, UploadServlet.DocInfo>) session.getAttribute(SESSION_FILES_KEY_V2);
+
+        if (sessionFiles == null) sessionFiles = new LinkedHashMap<>();
+
+        req.setAttribute("sessionFiles", sessionFiles);
+        req.getRequestDispatcher("/WEB-INF/jsp/pages/upload.jsp").forward(req, resp);
+    }
+
+    @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setCharacterEncoding("UTF-8");
         resp.setCharacterEncoding("UTF-8");
 
         HttpSession session = req.getSession(true);
-        String usuarioLogado = (String) session.getAttribute("usuarioLogado");
-        if (usuarioLogado == null || usuarioLogado.isBlank()) {
-            resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Faça login para enviar arquivos."));
-            return;
-        }
 
         if (!JavaxServletFileUpload.isMultipartContent(req)) {
-            resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Requisição inválida: esperado multipart/form-data."));
+            resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url("Requisição inválida: esperado multipart/form-data."));
             return;
         }
 
@@ -101,8 +115,7 @@ public class UploadServlet extends HttpServlet {
 
                 if (item.isFormField()) {
                     if ("categoria".equals(item.getFieldName())) {
-                    	categoria = item.getString(java.nio.charset.StandardCharsets.UTF_8);
-
+                        categoria = item.getString(java.nio.charset.StandardCharsets.UTF_8);
                     }
                     continue;
                 }
@@ -113,16 +126,17 @@ public class UploadServlet extends HttpServlet {
             }
 
             if (categoria == null || categoria.isBlank()) {
-                resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Selecione a categoria do comprovante."));
+                resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url("Selecione a categoria do comprovante."));
                 return;
             }
 
             if (filesToSave.isEmpty()) {
-                resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Selecione pelo menos 1 arquivo para enviar."));
+                resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url("Selecione pelo menos 1 arquivo para enviar."));
                 return;
             }
 
-            String safeUser = sanitizeUser(usuarioLogado);
+            // ✅ Sem login: salva em uma pasta padrão "anon"
+            String safeUser = "anon";
             Path userDir = uploadsBaseDir.resolve(safeUser);
             Files.createDirectories(userDir);
 
@@ -136,17 +150,14 @@ public class UploadServlet extends HttpServlet {
             int okCount = 0;
 
             for (DiskFileItem f : filesToSave) {
-                // id único por arquivo
                 String id = UUID.randomUUID().toString();
 
                 String original = safeOriginalName(f.getName());
-                // nome em disco: timestamp + uuid + original
                 String stored = ts + "_" + id + "_" + original;
 
                 Path dest = userDir.resolve(stored).normalize().toAbsolutePath();
                 Path base = userDir.normalize().toAbsolutePath();
 
-                // garantia extra: não grava fora da pasta do usuário
                 if (!dest.startsWith(base)) {
                     getServletContext().log("[UploadServlet] tentativa de path traversal: " + dest);
                     continue;
@@ -170,25 +181,21 @@ public class UploadServlet extends HttpServlet {
             session.setAttribute(SESSION_FILES_KEY_V2, sessionFiles);
 
             if (okCount == 0) {
-                resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Nenhum arquivo pôde ser salvo."));
+                resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url("Nenhum arquivo pôde ser salvo."));
                 return;
             }
 
-            resp.sendRedirect(req.getContextPath() + "/home?msg=" + url(okCount + " arquivo(s) enviado(s) com sucesso."));
+            resp.sendRedirect(req.getContextPath() + "/upload?msg=" + url(okCount + " arquivo(s) enviado(s) com sucesso."));
         } catch (FileUploadException e) {
             getServletContext().log("[UploadServlet] FileUploadException", e);
-            resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Falha ao processar upload: " + e.getMessage()));
+            resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url("Falha ao processar upload: " + e.getMessage()));
         } catch (Exception e) {
             getServletContext().log("[UploadServlet] Exception", e);
-            resp.sendRedirect(req.getContextPath() + "/home?erro=" + url("Erro inesperado no upload: " + e.getMessage()));
+            resp.sendRedirect(req.getContextPath() + "/upload?erro=" + url("Erro inesperado no upload: " + e.getMessage()));
         }
     }
 
     // ===== Helpers =====
-
-    private static String sanitizeUser(String user) {
-        return user.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
 
     private static String safeOriginalName(String original) {
         String base = FilenameUtils.getName(original == null ? "" : original);
@@ -204,10 +211,6 @@ public class UploadServlet extends HttpServlet {
         }
     }
 
-    /**
-     * Metadados do arquivo (sem banco).
-     * Se você já tem autoescola.util.DocumentosStore.DocInfo, pode mover pra lá e reutilizar.
-     */
     public static class DocInfo {
         public String id;
         public String originalName;
